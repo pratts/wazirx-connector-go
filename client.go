@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 type APIDetails struct {
@@ -132,11 +133,44 @@ func (client Client) get(detail APIDetails, params map[string]interface{}) (map[
 }
 
 func (client Client) post(detail APIDetails, params map[string]interface{}) (map[string]interface{}, error) {
-	return make(map[string]interface{}), nil
+	request := &http.Client{}
+	getRequest, err := http.NewRequest("POST", BASE_URL+detail.Url, strings.NewReader(client.getEncodedParams(params)))
+	getRequest.Header = client.getHeaders(detail.Client)
+	response, err := request.Do(getRequest)
+	if err != nil {
+		return nil, err
+	}
+	data, readErr := ioutil.ReadAll(response.Body)
+	if readErr != nil {
+		return nil, readErr
+	}
+	defer response.Body.Close()
+
+	res := make(map[string]interface{})
+	json.Unmarshal(data, &res)
+	return res, nil
 }
 
 func (client Client) delete(detail APIDetails, params map[string]interface{}) (map[string]interface{}, error) {
-	return make(map[string]interface{}), nil
+	request := &http.Client{}
+	getRequest, err := http.NewRequest("DELETE", BASE_URL+detail.Url+"?"+client.getEncodedParams(params), nil)
+	if err != nil {
+		return nil, fmt.Errorf("Error while creating get request")
+	}
+	getRequest.Header = client.getHeaders(detail.Client)
+	response, err := request.Do(getRequest)
+	if err != nil {
+		return nil, err
+	}
+	data, readErr := ioutil.ReadAll(response.Body)
+	if readErr != nil {
+		return nil, readErr
+	}
+	defer response.Body.Close()
+
+	res := make(map[string]interface{})
+	json.Unmarshal(data, &res)
+	return res, nil
 }
 
 func main() {
