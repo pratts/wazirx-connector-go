@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
 
 type APIDetails struct {
@@ -84,7 +85,7 @@ func (client Client) call(name string, params map[string]interface{}) (map[strin
 	if !isFound {
 		return nil, fmt.Errorf("Invalid api type")
 	}
-	if len(params) == 0 {
+	if params == nil || len(params) == 0 {
 		params = make(map[string]interface{})
 	}
 
@@ -171,6 +172,64 @@ func (client Client) delete(detail APIDetails, params map[string]interface{}) (m
 	res := make(map[string]interface{})
 	json.Unmarshal(data, &res)
 	return res, nil
+}
+
+//	ping
+func (client Client) ping() (map[string]interface{}, error) {
+	return client.call("ping", nil)
+}
+
+//	time
+func (client Client) time() (map[string]interface{}, error) {
+	return client.call("time", nil)
+}
+
+//	system_status
+func (client Client) systemStatus() (map[string]interface{}, error) {
+	return client.call("system_status", nil)
+}
+
+//	exchange_info
+func (client Client) exchangeInfo() (map[string]interface{}, error) {
+	return client.call("exchange_info", nil)
+}
+
+//	tickers
+func (client Client) tickers() (map[string]interface{}, error) {
+	return client.call("tickers", nil)
+}
+
+//	ticker
+func (client Client) ticker(symbol string) (map[string]interface{}, error) {
+	params := make(map[string]interface{})
+	params["symbol"] = symbol
+	return client.call("ticker", params)
+}
+
+//	depth
+func (client Client) depth(symbol string, limit int) (map[string]interface{}, error) {
+	params := make(map[string]interface{})
+	params["symbol"] = symbol
+	params["limit"] = limit
+	return client.call("depth", params)
+}
+
+//	trades
+func (client Client) trades(symbol string, limit int) (map[string]interface{}, error) {
+	params := make(map[string]interface{})
+	params["symbol"] = symbol
+	params["limit"] = limit
+	return client.call("trades", params)
+}
+
+//	historical_trades
+func (client Client) historicalTrades(symbol string, limit int) (map[string]interface{}, error) {
+	params := make(map[string]interface{})
+	params["symbol"] = symbol
+	params["limit"] = limit
+	params["recvWindow"] = 10000
+	params["timestamp"] = time.Now().Unix()
+	return client.call("historical_trades", params)
 }
 
 func main() {
