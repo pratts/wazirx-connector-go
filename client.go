@@ -1,4 +1,4 @@
-package main
+package wazirxconnectorgo
 
 import (
 	"crypto/hmac"
