@@ -78,7 +78,7 @@ func (client Client) generateSignature(params map[string]interface{}) string {
 	return sha
 }
 
-func (client Client) Call(name string, params map[string]interface{}) (map[string]interface{}, error) {
+func (client Client) call(name string, params map[string]interface{}) (map[string]interface{}, error) {
 	detail, isFound := client.getAPIDetailForName(name)
 	response := make(map[string]interface{})
 	var err error
@@ -175,61 +175,61 @@ func (client Client) delete(detail APIDetails, params map[string]interface{}) (m
 }
 
 //	ping
-func (client Client) ping() (map[string]interface{}, error) {
-	return client.Call("ping", nil)
+func (client Client) Ping() (map[string]interface{}, error) {
+	return client.call("ping", nil)
 }
 
 //	time
-func (client Client) time() (map[string]interface{}, error) {
-	return client.Call("time", nil)
+func (client Client) Time() (map[string]interface{}, error) {
+	return client.call("time", nil)
 }
 
 //	system_status
-func (client Client) systemStatus() (map[string]interface{}, error) {
-	return client.Call("system_status", nil)
+func (client Client) SystemStatus() (map[string]interface{}, error) {
+	return client.call("system_status", nil)
 }
 
 //	exchange_info
-func (client Client) exchangeInfo() (map[string]interface{}, error) {
-	return client.Call("exchange_info", nil)
+func (client Client) ExchangeInfo() (map[string]interface{}, error) {
+	return client.call("exchange_info", nil)
 }
 
 //	tickers
-func (client Client) tickers() (map[string]interface{}, error) {
-	return client.Call("tickers", nil)
+func (client Client) Tickers() (map[string]interface{}, error) {
+	return client.call("tickers", nil)
 }
 
 //	ticker
-func (client Client) ticker(symbol string) (map[string]interface{}, error) {
+func (client Client) Ticker(symbol string) (map[string]interface{}, error) {
 	params := make(map[string]interface{})
 	params["symbol"] = symbol
-	return client.Call("ticker", params)
+	return client.call("ticker", params)
 }
 
 //	depth
-func (client Client) depth(symbol string, limit int) (map[string]interface{}, error) {
+func (client Client) Depth(symbol string, limit int) (map[string]interface{}, error) {
 	params := make(map[string]interface{})
 	params["symbol"] = symbol
 	params["limit"] = limit
-	return client.Call("depth", params)
+	return client.call("depth", params)
 }
 
 //	trades
-func (client Client) trades(symbol string, limit int) (map[string]interface{}, error) {
+func (client Client) Trades(symbol string, limit int) (map[string]interface{}, error) {
 	params := make(map[string]interface{})
 	params["symbol"] = symbol
 	params["limit"] = limit
-	return client.Call("trades", params)
+	return client.call("trades", params)
 }
 
 //	historical_trades
-func (client Client) historicalTrades(symbol string, limit int) (map[string]interface{}, error) {
+func (client Client) HistoricalTrades(symbol string, limit int) (map[string]interface{}, error) {
 	params := make(map[string]interface{})
 	params["symbol"] = symbol
 	params["limit"] = limit
 	params["recvWindow"] = 10000
 	params["timestamp"] = time.Now().Unix()
-	return client.Call("historical_trades", params)
+	return client.call("historical_trades", params)
 }
 
 func main() {
