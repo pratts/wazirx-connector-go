@@ -237,7 +237,7 @@ func main() {
 	params := make(map[string]interface{})
 	params["symbol"] = "btcinr"
 
-	data, err := client.Call("system_status", params)
+	data, err := client.SystemStatus()
 	fmt.Println("Error: ", err)
 	fmt.Println("Data: ", data)
 }
