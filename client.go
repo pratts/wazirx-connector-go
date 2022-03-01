@@ -176,34 +176,34 @@ func (client Client) delete(detail APIDetails, params map[string]interface{}) (m
 
 //	ping
 func (client Client) ping() (map[string]interface{}, error) {
-	return client.call("ping", nil)
+	return client.Call("ping", nil)
 }
 
 //	time
 func (client Client) time() (map[string]interface{}, error) {
-	return client.call("time", nil)
+	return client.Call("time", nil)
 }
 
 //	system_status
 func (client Client) systemStatus() (map[string]interface{}, error) {
-	return client.call("system_status", nil)
+	return client.Call("system_status", nil)
 }
 
 //	exchange_info
 func (client Client) exchangeInfo() (map[string]interface{}, error) {
-	return client.call("exchange_info", nil)
+	return client.Call("exchange_info", nil)
 }
 
 //	tickers
 func (client Client) tickers() (map[string]interface{}, error) {
-	return client.call("tickers", nil)
+	return client.Call("tickers", nil)
 }
 
 //	ticker
 func (client Client) ticker(symbol string) (map[string]interface{}, error) {
 	params := make(map[string]interface{})
 	params["symbol"] = symbol
-	return client.call("ticker", params)
+	return client.Call("ticker", params)
 }
 
 //	depth
@@ -211,7 +211,7 @@ func (client Client) depth(symbol string, limit int) (map[string]interface{}, er
 	params := make(map[string]interface{})
 	params["symbol"] = symbol
 	params["limit"] = limit
-	return client.call("depth", params)
+	return client.Call("depth", params)
 }
 
 //	trades
@@ -219,7 +219,7 @@ func (client Client) trades(symbol string, limit int) (map[string]interface{}, e
 	params := make(map[string]interface{})
 	params["symbol"] = symbol
 	params["limit"] = limit
-	return client.call("trades", params)
+	return client.Call("trades", params)
 }
 
 //	historical_trades
@@ -229,7 +229,7 @@ func (client Client) historicalTrades(symbol string, limit int) (map[string]inte
 	params["limit"] = limit
 	params["recvWindow"] = 10000
 	params["timestamp"] = time.Now().Unix()
-	return client.call("historical_trades", params)
+	return client.Call("historical_trades", params)
 }
 
 func main() {
@@ -237,7 +237,7 @@ func main() {
 	params := make(map[string]interface{})
 	params["symbol"] = "btcinr"
 
-	data, err := client.call("system_status", params)
+	data, err := client.Call("system_status", params)
 	fmt.Println("Error: ", err)
 	fmt.Println("Data: ", data)
 }
