@@ -78,7 +78,7 @@ func (client Client) generateSignature(params map[string]interface{}) string {
 	return sha
 }
 
-func (client Client) call(name string, params map[string]interface{}) (map[string]interface{}, error) {
+func (client Client) Call(name string, params map[string]interface{}) (map[string]interface{}, error) {
 	detail, isFound := client.getAPIDetailForName(name)
 	response := make(map[string]interface{})
 	var err error
