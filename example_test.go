@@ -1,6 +1,7 @@
 package wazirxconnectorgo
 
 import (
+	"context"
 	"fmt"
 	"log"
 )
@@ -17,7 +18,7 @@ func ExampleNew() {
 
 func ExampleClient_Ping() {
 	client := New("", "")
-	data, err := client.Ping()
+	data, err := client.Ping(context.Background())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -26,7 +27,7 @@ func ExampleClient_Ping() {
 
 func ExampleClient_Tickers() {
 	client := New("", "")
-	data, err := client.Tickers()
+	data, err := client.Tickers(context.Background())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -40,7 +41,7 @@ func ExampleClient_Tickers() {
 
 func ExampleClient_Ticker() {
 	client := New("", "")
-	data, err := client.Ticker("btcinr")
+	data, err := client.Ticker(context.Background(), "btcinr")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -51,7 +52,7 @@ func ExampleClient_Ticker() {
 func ExampleClient_Depth() {
 	client := New("", "")
 	// Valid limits: 1 5 10 20 50 100 500 1000
-	data, err := client.Depth("btcinr", 10)
+	data, err := client.Depth(context.Background(), "btcinr", 10)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -61,7 +62,7 @@ func ExampleClient_Depth() {
 func ExampleClient_Kline() {
 	client := New("", "")
 	// Pass 0 for limit/startTime/endTime to use API defaults.
-	data, err := client.Kline("btcinr", "1h", 5, 1647822960, 1647823020)
+	data, err := client.Kline(context.Background(), "btcinr", "1h", 5, 1647822960, 1647823020)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -70,7 +71,7 @@ func ExampleClient_Kline() {
 
 func ExampleClient_CreateOrder() {
 	client := New("your-api-key", "your-secret-key")
-	data, err := client.CreateOrder("btcinr", "buy", "limit", "3000000", "0.001")
+	data, err := client.CreateOrder(context.Background(), "btcinr", "buy", "limit", "3000000", "0.001")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -80,7 +81,7 @@ func ExampleClient_CreateOrder() {
 
 func ExampleClient_QueryOrder() {
 	client := New("your-api-key", "your-secret-key")
-	data, err := client.QueryOrder(23223196)
+	data, err := client.QueryOrder(context.Background(), 23223196)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -89,7 +90,7 @@ func ExampleClient_QueryOrder() {
 
 func ExampleClient_CancelOrder() {
 	client := New("your-api-key", "your-secret-key")
-	data, err := client.CancelOrder("btcinr", 23223196)
+	data, err := client.CancelOrder(context.Background(), "btcinr", 23223196)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -98,7 +99,7 @@ func ExampleClient_CancelOrder() {
 
 func ExampleClient_AccountInfo() {
 	client := New("your-api-key", "your-secret-key")
-	data, err := client.AccountInfo()
+	data, err := client.AccountInfo(context.Background())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -108,7 +109,7 @@ func ExampleClient_AccountInfo() {
 func ExampleClient_Withdraw() {
 	client := New("your-api-key", "your-secret-key")
 	consent := "I hereby confirm that I am withdrawing these crypto assets."
-	data, err := client.Withdraw("eth", "0xYourAddress", "0.05", "eth", consent)
+	data, err := client.Withdraw(context.Background(), "eth", "0xYourAddress", "0.05", "eth", consent)
 	if err != nil {
 		log.Fatal(err)
 	}

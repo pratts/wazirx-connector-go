@@ -1,28 +1,27 @@
 package wazirxconnectorgo
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"time"
 )
 
 // --- Helpers ---
 
-func setupMockServer(t *testing.T, handler http.HandlerFunc) *Client {
+func setupMockServer(t *testing.T, handler http.HandlerFunc, opts ...Option) *Client {
 	t.Helper()
 	ts := httptest.NewServer(handler)
-	original := BASE_URL
-	BASE_URL = ts.URL
-	t.Cleanup(func() {
-		ts.Close()
-		BASE_URL = original
-	})
-	return New("test-api-key", "test-secret")
+	t.Cleanup(ts.Close)
+	allOpts := append([]Option{WithBaseURL(ts.URL)}, opts...)
+	return New("test-api-key", "test-secret", allOpts...)
 }
 
 func writeJSON(w http.ResponseWriter, v any) {
@@ -60,10 +59,11 @@ func assertAPIKeyHeader(t *testing.T, r *http.Request) {
 	}
 }
 
+var bg = context.Background()
+
 // --- Unit tests ---
 
-func TestReadMapperJson_AllEntriesPresent(t *testing.T) {
-	data := readMapperJson()
+func TestEndpointMap_AllEntriesPresent(t *testing.T) {
 	expected := []string{
 		"ping", "time", "system_status", "exchange_info",
 		"tickers", "ticker", "depth", "trades", "kline",
@@ -75,25 +75,24 @@ func TestReadMapperJson_AllEntriesPresent(t *testing.T) {
 		"sub_account_transfer_history", "sub_account_accounts", "sub_account_fund_transfer",
 	}
 	for _, key := range expected {
-		if _, ok := data[key]; !ok {
-			t.Errorf("API_MAP missing key %q", key)
+		if _, ok := endpointMap[key]; !ok {
+			t.Errorf("endpointMap missing key %q", key)
 		}
 	}
 }
 
-func TestReadMapperJson_TickerURLCorrect(t *testing.T) {
+func TestEndpointMap_TickerURLCorrect(t *testing.T) {
 	// Regression: ticker was previously mapped to /sapi/v1/depth by mistake.
-	data := readMapperJson()
-	if data["ticker"].Url != "/sapi/v1/ticker/24hr" {
-		t.Errorf("ticker URL = %q, want /sapi/v1/ticker/24hr", data["ticker"].Url)
+	if endpointMap["ticker"].URL != "/sapi/v1/ticker/24hr" {
+		t.Errorf("ticker URL = %q, want /sapi/v1/ticker/24hr", endpointMap["ticker"].URL)
 	}
 }
 
-func TestGetEncodedParams_SortsKeysAlphabetically(t *testing.T) {
+func TestEncodeParams_SortsKeysAlphabetically(t *testing.T) {
 	client := New("", "")
-	got := client.getEncodedParams(map[string]any{"b": "2", "a": "1"})
+	got := client.encodeParams(map[string]any{"b": "2", "a": "1"})
 	if got != "a=1&b=2" {
-		t.Errorf("getEncodedParams = %q, want %q", got, "a=1&b=2")
+		t.Errorf("encodeParams = %q, want %q", got, "a=1&b=2")
 	}
 }
 
@@ -132,9 +131,66 @@ func TestGetHeaders_SignedIncludesAPIKey(t *testing.T) {
 
 func TestCall_UnknownNameReturnsError(t *testing.T) {
 	client := New("key", "secret")
-	_, err := client.call("does_not_exist", nil)
+	_, err := client.call(bg, "does_not_exist", nil)
 	if err == nil {
-		t.Error("expected error for unknown API name, got nil")
+		t.Error("expected error for unknown endpoint, got nil")
+	}
+}
+
+// --- Options ---
+
+func TestWithRecvWindow(t *testing.T) {
+	client := setupMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("recvWindow") != "20000" {
+			t.Errorf("recvWindow = %q, want 20000", r.URL.Query().Get("recvWindow"))
+		}
+		writeJSON(w, map[string]any{})
+	}, WithRecvWindow(20000))
+	if _, err := client.AccountInfo(bg); err != nil {
+		t.Fatalf("AccountInfo: %v", err)
+	}
+}
+
+func TestWithHTTPClient(t *testing.T) {
+	custom := &http.Client{Timeout: 5 * time.Second}
+	client := New("key", "secret", WithHTTPClient(custom))
+	if client.httpClient != custom {
+		t.Error("WithHTTPClient did not replace the HTTP client")
+	}
+}
+
+// --- APIError ---
+
+func TestAPIError_NonOKStatusReturnsError(t *testing.T) {
+	client := setupMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		writeJSON(w, map[string]any{"code": -1100, "message": "bad request"})
+	})
+	_, err := client.Ping(bg)
+	if err == nil {
+		t.Fatal("expected error for 400 response, got nil")
+	}
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("expected *APIError, got %T: %v", err, err)
+	}
+	if apiErr.StatusCode != http.StatusBadRequest {
+		t.Errorf("StatusCode = %d, want %d", apiErr.StatusCode, http.StatusBadRequest)
+	}
+}
+
+func TestAPIError_ServerErrorReturnsError(t *testing.T) {
+	client := setupMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		writeJSON(w, map[string]any{"message": "internal error"})
+	})
+	_, err := client.Ping(bg)
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("expected *APIError, got %T", err)
+	}
+	if apiErr.StatusCode != http.StatusInternalServerError {
+		t.Errorf("StatusCode = %d, want %d", apiErr.StatusCode, http.StatusInternalServerError)
 	}
 }
 
@@ -146,7 +202,7 @@ func TestPing(t *testing.T) {
 		assertPath(t, r, "/sapi/v1/ping")
 		writeJSON(w, map[string]any{})
 	})
-	if _, err := client.Ping(); err != nil {
+	if _, err := client.Ping(bg); err != nil {
 		t.Fatalf("Ping: %v", err)
 	}
 }
@@ -157,7 +213,7 @@ func TestTime(t *testing.T) {
 		assertPath(t, r, "/sapi/v1/time")
 		writeJSON(w, map[string]any{"serverTime": 1234567890000})
 	})
-	if _, err := client.Time(); err != nil {
+	if _, err := client.Time(bg); err != nil {
 		t.Fatalf("Time: %v", err)
 	}
 }
@@ -168,7 +224,7 @@ func TestSystemStatus(t *testing.T) {
 		assertPath(t, r, "/sapi/v1/systemStatus")
 		writeJSON(w, map[string]any{"status": "normal"})
 	})
-	if _, err := client.SystemStatus(); err != nil {
+	if _, err := client.SystemStatus(bg); err != nil {
 		t.Fatalf("SystemStatus: %v", err)
 	}
 }
@@ -179,7 +235,7 @@ func TestExchangeInfo(t *testing.T) {
 		assertPath(t, r, "/sapi/v1/exchangeInfo")
 		writeJSON(w, map[string]any{"timezone": "UTC"})
 	})
-	if _, err := client.ExchangeInfo(); err != nil {
+	if _, err := client.ExchangeInfo(bg); err != nil {
 		t.Fatalf("ExchangeInfo: %v", err)
 	}
 }
@@ -192,7 +248,7 @@ func TestTickers_ReturnsSlice(t *testing.T) {
 		assertPath(t, r, "/sapi/v1/tickers/24hr")
 		writeJSON(w, []any{map[string]any{"symbol": "btcinr"}})
 	})
-	data, err := client.Tickers()
+	data, err := client.Tickers(bg)
 	if err != nil {
 		t.Fatalf("Tickers: %v", err)
 	}
@@ -210,7 +266,7 @@ func TestTicker(t *testing.T) {
 		}
 		writeJSON(w, map[string]any{"symbol": "btcinr"})
 	})
-	if _, err := client.Ticker("btcinr"); err != nil {
+	if _, err := client.Ticker(bg, "btcinr"); err != nil {
 		t.Fatalf("Ticker: %v", err)
 	}
 }
@@ -228,7 +284,7 @@ func TestDepth(t *testing.T) {
 		}
 		writeJSON(w, map[string]any{"bids": []any{}})
 	})
-	if _, err := client.Depth("btcinr", 10); err != nil {
+	if _, err := client.Depth(bg, "btcinr", 10); err != nil {
 		t.Fatalf("Depth: %v", err)
 	}
 }
@@ -246,7 +302,7 @@ func TestTrades(t *testing.T) {
 		}
 		writeJSON(w, []any{})
 	})
-	if _, err := client.Trades("btcinr", 20); err != nil {
+	if _, err := client.Trades(bg, "btcinr", 20); err != nil {
 		t.Fatalf("Trades: %v", err)
 	}
 }
@@ -273,7 +329,7 @@ func TestKline_AllParamsSent(t *testing.T) {
 		}
 		writeJSON(w, []any{})
 	})
-	if _, err := client.Kline("btcinr", "1h", 5, 1647822960, 1647823020); err != nil {
+	if _, err := client.Kline(bg, "btcinr", "1h", 5, 1647822960, 1647823020); err != nil {
 		t.Fatalf("Kline: %v", err)
 	}
 }
@@ -292,7 +348,7 @@ func TestKline_ZeroValuesOmitted(t *testing.T) {
 		}
 		writeJSON(w, []any{})
 	})
-	if _, err := client.Kline("btcinr", "1d", 0, 0, 0); err != nil {
+	if _, err := client.Kline(bg, "btcinr", "1d", 0, 0, 0); err != nil {
 		t.Fatalf("Kline: %v", err)
 	}
 }
@@ -311,7 +367,7 @@ func TestHistoricalTrades(t *testing.T) {
 		}
 		writeJSON(w, []any{})
 	})
-	if _, err := client.HistoricalTrades("btcinr", 10); err != nil {
+	if _, err := client.HistoricalTrades(bg, "btcinr", 10); err != nil {
 		t.Fatalf("HistoricalTrades: %v", err)
 	}
 }
@@ -328,7 +384,7 @@ func TestMyTrades(t *testing.T) {
 		}
 		writeJSON(w, []any{})
 	})
-	if _, err := client.MyTrades(40014554366); err != nil {
+	if _, err := client.MyTrades(bg, 40014554366); err != nil {
 		t.Fatalf("MyTrades: %v", err)
 	}
 }
@@ -345,7 +401,7 @@ func TestQueryOrder(t *testing.T) {
 		}
 		writeJSON(w, map[string]any{"orderId": 23223196})
 	})
-	if _, err := client.QueryOrder(23223196); err != nil {
+	if _, err := client.QueryOrder(bg, 23223196); err != nil {
 		t.Fatalf("QueryOrder: %v", err)
 	}
 }
@@ -362,7 +418,7 @@ func TestOpenOrders(t *testing.T) {
 		}
 		writeJSON(w, []any{})
 	})
-	if _, err := client.OpenOrders("btcinr"); err != nil {
+	if _, err := client.OpenOrders(bg, "btcinr"); err != nil {
 		t.Fatalf("OpenOrders: %v", err)
 	}
 }
@@ -379,7 +435,7 @@ func TestAllOrders(t *testing.T) {
 		}
 		writeJSON(w, []any{})
 	})
-	if _, err := client.AllOrders("btcinr"); err != nil {
+	if _, err := client.AllOrders(bg, "btcinr"); err != nil {
 		t.Fatalf("AllOrders: %v", err)
 	}
 }
@@ -392,7 +448,7 @@ func TestAccountInfo(t *testing.T) {
 		assertAPIKeyHeader(t, r)
 		writeJSON(w, map[string]any{"canTrade": true})
 	})
-	if _, err := client.AccountInfo(); err != nil {
+	if _, err := client.AccountInfo(bg); err != nil {
 		t.Fatalf("AccountInfo: %v", err)
 	}
 }
@@ -405,7 +461,7 @@ func TestFundsInfo(t *testing.T) {
 		assertAPIKeyHeader(t, r)
 		writeJSON(w, []any{})
 	})
-	if _, err := client.FundsInfo(); err != nil {
+	if _, err := client.FundsInfo(bg); err != nil {
 		t.Fatalf("FundsInfo: %v", err)
 	}
 }
@@ -418,7 +474,7 @@ func TestCoinInfo(t *testing.T) {
 		assertAPIKeyHeader(t, r)
 		writeJSON(w, []any{})
 	})
-	if _, err := client.CoinInfo(); err != nil {
+	if _, err := client.CoinInfo(bg); err != nil {
 		t.Fatalf("CoinInfo: %v", err)
 	}
 }
@@ -438,7 +494,7 @@ func TestWithdrawHistory(t *testing.T) {
 		}
 		writeJSON(w, []any{})
 	})
-	if _, err := client.WithdrawHistory(2, 5); err != nil {
+	if _, err := client.WithdrawHistory(bg, 2, 5); err != nil {
 		t.Fatalf("WithdrawHistory: %v", err)
 	}
 }
@@ -458,7 +514,7 @@ func TestDepositAddress(t *testing.T) {
 		}
 		writeJSON(w, map[string]any{"address": "bc1q..."})
 	})
-	if _, err := client.DepositAddress("btc", "btc"); err != nil {
+	if _, err := client.DepositAddress(bg, "btc", "btc"); err != nil {
 		t.Fatalf("DepositAddress: %v", err)
 	}
 }
@@ -471,7 +527,7 @@ func TestSubAccountTransferHistory(t *testing.T) {
 		assertAPIKeyHeader(t, r)
 		writeJSON(w, []any{})
 	})
-	if _, err := client.SubAccountTransferHistory(); err != nil {
+	if _, err := client.SubAccountTransferHistory(bg); err != nil {
 		t.Fatalf("SubAccountTransferHistory: %v", err)
 	}
 }
@@ -484,7 +540,7 @@ func TestSubAccountAccounts(t *testing.T) {
 		assertAPIKeyHeader(t, r)
 		writeJSON(w, []any{})
 	})
-	if _, err := client.SubAccountAccounts(); err != nil {
+	if _, err := client.SubAccountAccounts(bg); err != nil {
 		t.Fatalf("SubAccountAccounts: %v", err)
 	}
 }
@@ -506,7 +562,7 @@ func TestCancelOrder(t *testing.T) {
 		}
 		writeJSON(w, map[string]any{"status": "CANCELLED"})
 	})
-	if _, err := client.CancelOrder("btcinr", 23223196); err != nil {
+	if _, err := client.CancelOrder(bg, "btcinr", 23223196); err != nil {
 		t.Fatalf("CancelOrder: %v", err)
 	}
 }
@@ -523,7 +579,7 @@ func TestCancelOpenOrders(t *testing.T) {
 		}
 		writeJSON(w, []any{})
 	})
-	if _, err := client.CancelOpenOrders("btcinr"); err != nil {
+	if _, err := client.CancelOpenOrders(bg, "btcinr"); err != nil {
 		t.Fatalf("CancelOpenOrders: %v", err)
 	}
 }
@@ -557,7 +613,7 @@ func TestCreateOrder(t *testing.T) {
 		}
 		writeJSON(w, map[string]any{"orderId": 12345})
 	})
-	if _, err := client.CreateOrder("btcinr", "buy", "limit", "3000000", "0.001"); err != nil {
+	if _, err := client.CreateOrder(bg, "btcinr", "buy", "limit", "3000000", "0.001"); err != nil {
 		t.Fatalf("CreateOrder: %v", err)
 	}
 }
@@ -573,7 +629,7 @@ func TestCreateTestOrder(t *testing.T) {
 		assertAPIKeyHeader(t, r)
 		writeJSON(w, map[string]any{})
 	})
-	if _, err := client.CreateTestOrder("btcinr", "buy", "limit", "3000000", "0.001"); err != nil {
+	if _, err := client.CreateTestOrder(bg, "btcinr", "buy", "limit", "3000000", "0.001"); err != nil {
 		t.Fatalf("CreateTestOrder: %v", err)
 	}
 }
@@ -589,7 +645,7 @@ func TestCreateAuthToken(t *testing.T) {
 		assertAPIKeyHeader(t, r)
 		writeJSON(w, map[string]any{"token": "abc123"})
 	})
-	if _, err := client.CreateAuthToken(); err != nil {
+	if _, err := client.CreateAuthToken(bg); err != nil {
 		t.Fatalf("CreateAuthToken: %v", err)
 	}
 }
@@ -618,7 +674,7 @@ func TestSubAccountFundTransfer(t *testing.T) {
 		}
 		writeJSON(w, map[string]any{"txnId": "abc"})
 	})
-	if _, err := client.SubAccountFundTransfer("from@example.com", "to@example.com", "btc", 0.5); err != nil {
+	if _, err := client.SubAccountFundTransfer(bg, "from@example.com", "to@example.com", "btc", "0.5"); err != nil {
 		t.Fatalf("SubAccountFundTransfer: %v", err)
 	}
 }
@@ -647,7 +703,7 @@ func TestWithdraw(t *testing.T) {
 		writeJSON(w, map[string]any{"id": "w123"})
 	})
 	consent := "I hereby confirm that I am withdrawing these crypto assets."
-	if _, err := client.Withdraw("eth", "0xAddress123", "0.1", "eth", consent); err != nil {
+	if _, err := client.Withdraw(bg, "eth", "0xAddress123", "0.1", "eth", consent); err != nil {
 		t.Fatalf("Withdraw: %v", err)
 	}
 }
