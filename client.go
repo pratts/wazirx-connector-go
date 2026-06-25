@@ -84,12 +84,12 @@ func readMapperJson() map[string]APIDetails {
 	return data
 }
 
-func (client Client) getAPIDetailForName(name string) (APIDetails, bool) {
+func (client *Client) getAPIDetailForName(name string) (APIDetails, bool) {
 	detail, isFound := client.apiDetails[name]
 	return detail, isFound
 }
 
-func (client Client) getHeaders(clientType string) http.Header {
+func (client *Client) getHeaders(clientType string) http.Header {
 	headers := http.Header{}
 	headers.Add("Content-Type", "application/x-www-form-urlencoded")
 	if clientType == "signed" {
@@ -98,7 +98,7 @@ func (client Client) getHeaders(clientType string) http.Header {
 	return headers
 }
 
-func (client Client) getEncodedParams(params map[string]any) string {
+func (client *Client) getEncodedParams(params map[string]any) string {
 	encoded := url.Values{}
 	for key, value := range params {
 		encoded.Set(key, fmt.Sprintf("%v", value))
@@ -106,13 +106,13 @@ func (client Client) getEncodedParams(params map[string]any) string {
 	return encoded.Encode()
 }
 
-func (client Client) generateSignature(params map[string]any) string {
+func (client *Client) generateSignature(params map[string]any) string {
 	hash := hmac.New(sha256.New, []byte(client.secretKey))
 	hash.Write([]byte(client.getEncodedParams(params)))
 	return hex.EncodeToString(hash.Sum(nil))
 }
 
-func (client Client) call(name string, params map[string]any) (any, error) {
+func (client *Client) call(name string, params map[string]any) (any, error) {
 	detail, isFound := client.getAPIDetailForName(name)
 	if !isFound {
 		return nil, fmt.Errorf("invalid api type: %s", name)
@@ -154,7 +154,7 @@ func parseResponse(body io.ReadCloser) (any, error) {
 	return res, nil
 }
 
-func (client Client) get(detail APIDetails, params map[string]any) (any, error) {
+func (client *Client) get(detail APIDetails, params map[string]any) (any, error) {
 	req, err := http.NewRequest("GET", BASE_URL+detail.Url+"?"+client.getEncodedParams(params), nil)
 	if err != nil {
 		return nil, fmt.Errorf("error creating GET request: %w", err)
@@ -167,7 +167,7 @@ func (client Client) get(detail APIDetails, params map[string]any) (any, error) 
 	return parseResponse(resp.Body)
 }
 
-func (client Client) post(detail APIDetails, params map[string]any) (any, error) {
+func (client *Client) post(detail APIDetails, params map[string]any) (any, error) {
 	req, err := http.NewRequest("POST", BASE_URL+detail.Url, strings.NewReader(client.getEncodedParams(params)))
 	if err != nil {
 		return nil, fmt.Errorf("error creating POST request: %w", err)
@@ -182,7 +182,7 @@ func (client Client) post(detail APIDetails, params map[string]any) (any, error)
 
 // postWithQuery sends a POST with params in the URL query string rather than the body.
 // Used by the withdraw endpoint which follows this pattern.
-func (client Client) postWithQuery(detail APIDetails, params map[string]any) (any, error) {
+func (client *Client) postWithQuery(detail APIDetails, params map[string]any) (any, error) {
 	req, err := http.NewRequest("POST", BASE_URL+detail.Url+"?"+client.getEncodedParams(params), nil)
 	if err != nil {
 		return nil, fmt.Errorf("error creating POST request: %w", err)
@@ -195,7 +195,7 @@ func (client Client) postWithQuery(detail APIDetails, params map[string]any) (an
 	return parseResponse(resp.Body)
 }
 
-func (client Client) delete(detail APIDetails, params map[string]any) (any, error) {
+func (client *Client) delete(detail APIDetails, params map[string]any) (any, error) {
 	req, err := http.NewRequest("DELETE", BASE_URL+detail.Url+"?"+client.getEncodedParams(params), nil)
 	if err != nil {
 		return nil, fmt.Errorf("error creating DELETE request: %w", err)
@@ -211,22 +211,22 @@ func (client Client) delete(detail APIDetails, params map[string]any) (any, erro
 // --- General ---
 
 // Ping tests connectivity to the REST API.
-func (client Client) Ping() (any, error) {
+func (client *Client) Ping() (any, error) {
 	return client.call("ping", nil)
 }
 
 // Time returns the current server time.
-func (client Client) Time() (any, error) {
+func (client *Client) Time() (any, error) {
 	return client.call("time", nil)
 }
 
 // SystemStatus returns the current system status (normal / system maintenance).
-func (client Client) SystemStatus() (any, error) {
+func (client *Client) SystemStatus() (any, error) {
 	return client.call("system_status", nil)
 }
 
 // ExchangeInfo returns current exchange trading rules and symbol information.
-func (client Client) ExchangeInfo() (any, error) {
+func (client *Client) ExchangeInfo() (any, error) {
 	return client.call("exchange_info", nil)
 }
 
@@ -234,29 +234,29 @@ func (client Client) ExchangeInfo() (any, error) {
 
 // Tickers returns 24-hour price change statistics for all symbols.
 // The response is a []any, each element being a map[string]any for one symbol.
-func (client Client) Tickers() (any, error) {
+func (client *Client) Tickers() (any, error) {
 	return client.call("tickers", nil)
 }
 
 // Ticker returns 24-hour price change statistics for a single symbol.
-func (client Client) Ticker(symbol string) (any, error) {
+func (client *Client) Ticker(symbol string) (any, error) {
 	return client.call("ticker", map[string]any{"symbol": symbol})
 }
 
 // Depth returns the order book for a symbol. Valid limits: 1 5 10 20 50 100 500 1000.
-func (client Client) Depth(symbol string, limit int) (any, error) {
+func (client *Client) Depth(symbol string, limit int) (any, error) {
 	return client.call("depth", map[string]any{"symbol": symbol, "limit": limit})
 }
 
 // Trades returns recent trades for a symbol, sorted newest-first. Max limit: 1000.
-func (client Client) Trades(symbol string, limit int) (any, error) {
+func (client *Client) Trades(symbol string, limit int) (any, error) {
 	return client.call("trades", map[string]any{"symbol": symbol, "limit": limit})
 }
 
 // Kline returns OHLCV candlestick data. interval must be one of:
 // 1m 5m 15m 30m 1h 2h 4h 6h 12h 1d 1w.
 // Pass 0 for limit, startTime, or endTime to omit them and use API defaults.
-func (client Client) Kline(symbol, interval string, limit int, startTime, endTime int64) (any, error) {
+func (client *Client) Kline(symbol, interval string, limit int, startTime, endTime int64) (any, error) {
 	params := map[string]any{
 		"symbol":   symbol,
 		"interval": interval,
@@ -274,7 +274,7 @@ func (client Client) Kline(symbol, interval string, limit int, startTime, endTim
 }
 
 // HistoricalTrades returns older trades for a symbol (signed — requires API key). Max limit: 1000.
-func (client Client) HistoricalTrades(symbol string, limit int) (any, error) {
+func (client *Client) HistoricalTrades(symbol string, limit int) (any, error) {
 	return client.call("historical_trades", map[string]any{
 		"symbol": symbol,
 		"limit":  limit,
@@ -283,7 +283,7 @@ func (client Client) HistoricalTrades(symbol string, limit int) (any, error) {
 
 // MyTrades returns the account's trade history filtered by orderId.
 // Pass orderId=0 to omit the filter and fetch the most recent trades.
-func (client Client) MyTrades(orderId int64) (any, error) {
+func (client *Client) MyTrades(orderId int64) (any, error) {
 	return client.call("my_trades", map[string]any{"orderId": orderId})
 }
 
@@ -291,7 +291,7 @@ func (client Client) MyTrades(orderId int64) (any, error) {
 
 // CreateOrder places a new spot order. side is "buy" or "sell".
 // orderType is "limit" or "stop_limit".
-func (client Client) CreateOrder(symbol, side, orderType, price, quantity string) (any, error) {
+func (client *Client) CreateOrder(symbol, side, orderType, price, quantity string) (any, error) {
 	return client.call("create_order", map[string]any{
 		"symbol":   symbol,
 		"side":     side,
@@ -302,7 +302,7 @@ func (client Client) CreateOrder(symbol, side, orderType, price, quantity string
 }
 
 // CreateTestOrder validates an order and signature without sending it to the matching engine.
-func (client Client) CreateTestOrder(symbol, side, orderType, price, quantity string) (any, error) {
+func (client *Client) CreateTestOrder(symbol, side, orderType, price, quantity string) (any, error) {
 	return client.call("create_test_order", map[string]any{
 		"symbol":   symbol,
 		"side":     side,
@@ -313,12 +313,12 @@ func (client Client) CreateTestOrder(symbol, side, orderType, price, quantity st
 }
 
 // QueryOrder returns the status and details of a single order.
-func (client Client) QueryOrder(orderId int64) (any, error) {
+func (client *Client) QueryOrder(orderId int64) (any, error) {
 	return client.call("query_order", map[string]any{"orderId": orderId})
 }
 
 // CancelOrder cancels an active order.
-func (client Client) CancelOrder(symbol string, orderId int64) (any, error) {
+func (client *Client) CancelOrder(symbol string, orderId int64) (any, error) {
 	return client.call("cancel_order", map[string]any{
 		"symbol":  symbol,
 		"orderId": orderId,
@@ -326,47 +326,47 @@ func (client Client) CancelOrder(symbol string, orderId int64) (any, error) {
 }
 
 // OpenOrders returns all currently open orders for a symbol.
-func (client Client) OpenOrders(symbol string) (any, error) {
+func (client *Client) OpenOrders(symbol string) (any, error) {
 	return client.call("open_orders", map[string]any{"symbol": symbol})
 }
 
 // CancelOpenOrders cancels all active orders on a symbol.
-func (client Client) CancelOpenOrders(symbol string) (any, error) {
+func (client *Client) CancelOpenOrders(symbol string) (any, error) {
 	return client.call("cancel_open_orders", map[string]any{"symbol": symbol})
 }
 
 // AllOrders returns all orders (active, cancelled, and filled) for a symbol.
-func (client Client) AllOrders(symbol string) (any, error) {
+func (client *Client) AllOrders(symbol string) (any, error) {
 	return client.call("all_orders", map[string]any{"symbol": symbol})
 }
 
 // --- Account ---
 
 // AccountInfo returns current account information including balances and permissions.
-func (client Client) AccountInfo() (any, error) {
+func (client *Client) AccountInfo() (any, error) {
 	return client.call("account_info", nil)
 }
 
 // FundsInfo returns fund balances for the current account.
-func (client Client) FundsInfo() (any, error) {
+func (client *Client) FundsInfo() (any, error) {
 	return client.call("funds_info", nil)
 }
 
 // CreateAuthToken creates a short-lived token used to authenticate WebSocket streams.
-func (client Client) CreateAuthToken() (any, error) {
+func (client *Client) CreateAuthToken() (any, error) {
 	return client.call("create_auth_token", nil)
 }
 
 // --- Crypto SAPIs ---
 
 // CoinInfo returns metadata for all supported coins (networks, deposit/withdraw status, etc.).
-func (client Client) CoinInfo() (any, error) {
+func (client *Client) CoinInfo() (any, error) {
 	return client.call("coin_info", nil)
 }
 
 // WithdrawHistory returns the account's withdrawal history.
 // transferType: 0 = external chain withdrawal, 1 = internal (WazirX-to-WazirX) transfer.
-func (client Client) WithdrawHistory(transferType, limit int) (any, error) {
+func (client *Client) WithdrawHistory(transferType, limit int) (any, error) {
 	return client.call("withdraw_history", map[string]any{
 		"transferType": transferType,
 		"limit":        limit,
@@ -374,7 +374,7 @@ func (client Client) WithdrawHistory(transferType, limit int) (any, error) {
 }
 
 // DepositAddress returns the deposit address for a coin on a given network.
-func (client Client) DepositAddress(coin, network string) (any, error) {
+func (client *Client) DepositAddress(coin, network string) (any, error) {
 	return client.call("deposit_address", map[string]any{
 		"coin":    coin,
 		"network": network,
@@ -383,7 +383,7 @@ func (client Client) DepositAddress(coin, network string) (any, error) {
 
 // Withdraw submits a crypto withdrawal request.
 // withdrawConsent must be exactly: "I hereby confirm that I am withdrawing these crypto assets."
-func (client Client) Withdraw(coin, address, amount, network, withdrawConsent string) (any, error) {
+func (client *Client) Withdraw(coin, address, amount, network, withdrawConsent string) (any, error) {
 	return client.call("withdraw", map[string]any{
 		"coin":            coin,
 		"address":         address,
@@ -396,17 +396,17 @@ func (client Client) Withdraw(coin, address, amount, network, withdrawConsent st
 // --- Sub-Accounts ---
 
 // SubAccountTransferHistory returns the fund transfer history across sub-accounts.
-func (client Client) SubAccountTransferHistory() (any, error) {
+func (client *Client) SubAccountTransferHistory() (any, error) {
 	return client.call("sub_account_transfer_history", nil)
 }
 
 // SubAccountAccounts returns the list of sub-accounts under the master account.
-func (client Client) SubAccountAccounts() (any, error) {
+func (client *Client) SubAccountAccounts() (any, error) {
 	return client.call("sub_account_accounts", nil)
 }
 
 // SubAccountFundTransfer transfers funds between a master account and a sub-account.
-func (client Client) SubAccountFundTransfer(fromEmail, toEmail, currency string, amount float64) (any, error) {
+func (client *Client) SubAccountFundTransfer(fromEmail, toEmail, currency string, amount float64) (any, error) {
 	return client.call("sub_account_fund_transfer", map[string]any{
 		"fromEmail": fromEmail,
 		"toEmail":   toEmail,
